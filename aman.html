@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Resume | Aman Kanojia</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .nav-link {
+            transition: all 0.2s ease-in-out;
+        }
+        .nav-link.active {
+            background-color: #4f46e5;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .page-section {
+            animation: fadeIn 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94); /* Enhanced easing */
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 384px;
+            max-height: 384px;
+        }
+        @media (max-width: 640px) {
+            .chart-container {
+                height: 300px;
+                max-height: 300px;
+            }
+        }
+        .tab-btn {
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            border-bottom-color: #4f46e5;
+            color: #4f46e5;
+            font-weight: 600;
+        }
+        .skill-btn {
+            transition: all 0.2s;
+        }
+        .skill-btn.active {
+            background-color: #4f46e5;
+            color: white;
+            box-shadow: 0 2px 4px rgba(79, 70, 229, 0.5);
+        }
+        .progress-bar-fill {
+            transition: width 1.5s ease-out; /* Animation for the bar growth */
+            width: 0%; 
+        }
+    </style>
+    <!-- Chosen Palette: Neutral Slate/White with Indigo Accent -->
+    <!-- Application Structure Plan: Designed a non-linear SPA with a persistent navigation bar. This dashboard-like structure (Home, Skills, Projects, Education, Experience) allows task-oriented exploration (e.g., a recruiter can jump directly to 'Projects'). This is superior to a linear resume scroll for user-driven interaction. JS hides/shows main content sections based on nav clicks. On mobile, the nav stacks on top. -->
+    <!-- Visualization & Content Choices: 1. Skills (List) -> Goal: Compare/Inform -> Viz: Radar Chart (Chart.js) + Interactive Progress Bars (HTML/JS Animation) -> Interaction: Chart hover, button clicks to drill-down, visual growth of bars on load. NEW: AI Interview Question Generator (Gemini API). 2. Projects (List) -> Goal: Organize/Detail/Quantify -> Viz: Tabbed Interface + Metrics Card -> Interaction: Click tabs to switch content. NEW: AI Project Summarizer (Gemini API). 3. Contact (New) -> Goal: Utility -> Viz: Button + Toast -> Interaction: Click to copy -> Justification: Improves user utility. - CONFIRMING NO SVG/Mermaid. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+</head>
+<body class="bg-slate-50 text-slate-900 flex flex-col md:flex-row min-h-screen">
+
+    <!-- Global API Configuration -->
+    <script>
+        const apiKey = "";
+        const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
+        
+        // Utility for exponential backoff during API calls
+        async function fetchWithRetry(url, options, maxRetries = 3) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        if (response.status === 429 && i < maxRetries - 1) {
+                            const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue;
+                        }
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return await response.json();
+                } catch (error) {
+                    if (i === maxRetries - 1) {
+                        throw error;
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Sidebar Navigation -->
+    <nav class="w-full md:w-64 bg-white shadow-lg p-6">
+        <h1 class="text-2xl font-bold text-indigo-600 mb-8 text-center md:text-left">Aman Kanojia</h1>
+        <ul class="space-y-3">
+            <li>
+                <button class="nav-link w-full text-left p-3 rounded-lg font-medium text-slate-700 hover:bg-indigo-50 active" data-target="home-section">
+                    <span class="mr-2">&#127968;</span> Home & Summary
+                </button>
+            </li>
+            <li>
+                <button class="nav-link w-full text-left p-3 rounded-lg font-medium text-slate-700 hover:bg-indigo-50" data-target="skills-section">
+                    <span class="mr-2">&#128736;</span> Skills Dashboard
+                </button>
+            </li>
+            <li>
+                <button class="nav-link w-full text-left p-3 rounded-lg font-medium text-slate-700 hover:bg-indigo-50" data-target="projects-section">
+                    <span class="mr-2">&#128200;</span> Projects Deep-Dive
+                </button>
+            </li>
+            <li>
+                <button class="nav-link w-full text-left p-3 rounded-lg font-medium text-slate-700 hover:bg-indigo-50" data-target="education-section">
+                    <span class="mr-2">&#127891;</span> Education & Certs
+                </button>
+            </li>
+            <li>
+                <button class="nav-link w-full text-left p-3 rounded-lg font-medium text-slate-700 hover:bg-indigo-50" data-target="experience-section">
+                    <span class="mr-2">&#128100;</span> Leadership
+                </button>
+            </li>
+        </ul>
+
+        <div class="mt-10 pt-6 border-t border-slate-200 text-sm">
+            <h3 class="font-semibold text-slate-800 mb-3">Contact Information</h3>
+            <div id="contact-email-div" class="flex items-center text-slate-600 mb-2 truncate group">
+                <span class="mr-2">&#128231;</span> amankanojia2345@gmail.com
+                <button onclick="copyContact('amankanojia2345@gmail.com')" class="ml-2 px-2 py-0.5 text-xs bg-indigo-50 text-indigo-600 rounded opacity-0 group-hover:opacity-100 transition-opacity">Copy</button>
+            </div>
+            <div class="flex items-center text-slate-600 mb-2 truncate group">
+                <span class="mr-2">&#128222;</span> +91 8530807373
+                <button onclick="copyContact('+918530807373')" class="ml-2 px-2 py-0.5 text-xs bg-indigo-50 text-indigo-600 rounded opacity-0 group-hover:opacity-100 transition-opacity">Copy</button>
+            </div>
+            <a href="https://www.linkedin.com/in/aman-kanojia-7b79a5249" target="_blank" class="block text-slate-600 hover:text-indigo-600 mb-2 truncate">&#128279; LinkedIn</a>
+            <a href="[Your Interactive Resume URL Here]" target="_blank" class="block text-slate-600 hover:text-indigo-600 mb-2 truncate font-bold">&#128187; Portfolio/Web Resume</a>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 p-6 md:p-10 overflow-y-auto">
+        
+        <!-- Home / Summary Section -->
+        <section id="home-section" class="page-section">
+            <div class="bg-white p-8 rounded-xl shadow-md">
+                <h2 class="text-3xl font-bold text-indigo-700 mb-6">Professional Summary</h2>
+                <p class="text-lg text-slate-700 leading-relaxed">
+                    This section provides a high-level overview of Aman's professional profile and objectives. It's the starting point for understanding his core competencies and career goals as a Data Science specialist.
+                </p>
+                <hr class="my-6 border-slate-200">
+                <p class="text-lg text-slate-800 leading-relaxed">
+                    A highly motivated and meticulous undergraduate specializing in <strong>Data Science</strong>, possessing a robust technical foundation in <strong>Python</strong>, <strong>Machine Learning (ML)</strong>, and **SQL**. The objective is to apply demonstrated technical proficiency in data analysis and strategic problem-solving methodologies within a progressive and innovative organizational structure. Possesses proven capability in developing and implementing end-to-end AI/ML solutions and effectively managing complex research initiatives.
+                </p>
+            </div>
+        </section>
+
+        <!-- Skills Dashboard Section -->
+        <section id="skills-section" class="page-section hidden">
+            <div class="bg-white p-8 rounded-xl shadow-md">
+                <h2 class="text-3xl font-bold text-indigo-700 mb-6">Skills Dashboard</h2>
+                <p class="text-lg text-slate-700 leading-relaxed mb-8">
+                    This dashboard transforms the static skills list into an interactive experience. The chart provides a high-level view of skill distribution, while the buttons below allow you to drill down into the specific technologies and methodologies in each category, visualized with **animated proficiency bars**.
+                </p>
+                
+                <div class="chart-container mb-10">
+                    <canvas id="skillsRadarChart"></canvas>
+                </div>
+                
+                <h3 class="text-2xl font-semibold text-slate-800 mb-6 text-center">Explore Skill Categories</h3>
+                <div class="flex flex-wrap justify-center gap-4 mb-8">
+                    <button class="skill-btn active px-6 py-2 rounded-full font-medium shadow-sm transition-all" data-target="skills-dsml">Data Science & ML</button>
+                    <button class="skill-btn bg-white hover:bg-indigo-50 text-indigo-600 border border-indigo-200 px-6 py-2 rounded-full font-medium shadow-sm transition-all" data-target="skills-programming">Programming</button>
+                    <button class="skill-btn bg-white hover:bg-indigo-50 text-indigo-600 border border-indigo-200 px-6 py-2 rounded-full font-medium shadow-sm transition-all" data-target="skills-databases">Databases</button>
+                    <button class="skill-btn bg-white hover:bg-indigo-50 text-indigo-600 border border-indigo-200 px-6 py-2 rounded-full font-medium shadow-sm transition-all" data-target="skills-tools">Tools & Environment</button>
+                </div>
+
+                <!-- LLM Feature: Interview Question Generator -->
+                <div class="bg-indigo-100 p-6 rounded-lg shadow-inner mb-6">
+                    <h4 class="text-xl font-semibold text-indigo-700 mb-3 flex items-center">
+                        <span class="mr-2 text-2xl">✨</span> AI Interview Generator
+                    </h4>
+                    <p class="text-slate-700 mb-4">
+                        Test skill understanding! Select a category above and click the button below to generate a behavioral or technical interview question based on the displayed skills.
+                    </p>
+                    <button id="generateQuestionBtn" class="w-full bg-indigo-600 text-white font-bold py-2 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-indigo-400" disabled>
+                        Generate Question for <span id="currentSkillCategory">Data Science & ML</span>
+                    </button>
+                    <div id="aiQuestionOutput" class="mt-4 p-4 bg-white border border-indigo-300 rounded-lg hidden">
+                        <p class="font-semibold text-indigo-800">Question:</p>
+                        <p id="aiQuestionText" class="text-slate-800 mt-1 italic"></p>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-6 rounded-lg min-h-[400px]">
+                    <div id="skills-dsml" class="skill-list space-y-4">
+                        <h4 class="text-xl font-semibold text-indigo-700 mb-4">Data Science & ML</h4>
+                        <div data-proficiency="85" class="skill-bar-item">
+                            <span class="text-sm font-medium text-slate-700">Machine Learning / Data Analysis</span>
+                            <div class="w-full bg-slate-200 rounded-full h-2.5">
+                                <div class="progress-bar-fill h-2.5 rounded-full bg-indigo-500"></div>
+                            </div>
+                        </div>
+                        <div data-proficiency="90" class="skill-bar-item">
+                            <span class="text-sm font-medium text-slate-700">Pandas, NumPy, Matplotlib, Seaborn</span>
+                            <div class="w-full bg-slate-200 rounded-full h-2.5">
+                                <div class="progress-bar-fill h-2.5 rounded-full bg-indigo-500"></div>
+                            </div>
+                        </div>
+                        <div data-proficiency="80" class="skill-bar-item">
+                            <span class="text-sm font-medium text-slate-700">YOLOv5 / Mask R-CNN (Deep Learning)</span>
+                            <div class="w-full bg-slate-200 rounded-full h-2.5">
+                                <div class="progress-bar-fill h-2.5 rounded-full bg-indigo-500"></div>
+                            </div>
+                        </div>
+                        <div data-proficiency="85" class="skill-bar-item">
+                            <span class="text-sm font-medium text-slate-700">CNNs / OpenCV (Computer Vision)</span>
+                            <div class="w-full bg-slate-200 rounded-full h-2.5">
+                                <div class="progress-bar-fill h-2.5 rounded-full bg-indigo-500"></div>
+                            </div>
+                        </div>
+                        <div data-proficiency="70" class="skill-bar-item">
+                            <span class="text-sm font-medium text-slate-700">SQL</span>
+                            <div class="w-full bg-slate-200 rounded-full h-2.5">
+                                <div class="progress-bar-fill h-2.5 rounded-full bg-indigo-500"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="skills-programming" class="skill-list hidden space-y-4">
+                        <h4 class="text-xl font-semibold text-indigo-700 mb-4">Programming</h4>
+                        <div data-proficiency="95" class="skill-bar-item">
+                            <span class="text-sm font-medium text-slate-700">Python</span>
+                            <div class="w-full bg-slate-200 rounded-full h-2.5">
+                                <div class="progress-bar-fill h-2.5 rounded-full bg-indigo-500"></div>
+                            </div>
+                        </div>
+                        <div data-proficiency="75" class="skill-bar-item">
+                            <span class="text-sm font-medium text-slate-700">C++</span>
+                            <div class="w-full bg-slate-200 rounded-full h-2.5">
+                                <div class="progress-bar-fill h-2.5 rounded-full bg-indigo-500"></div>
+                            </div>
+                        </div>
+                        <div data-proficiency="60" class="skill-bar-item">
+                            <span class="text-sm font-medium text-slate-700">HTML</span>
+                            <div class="w-full bg-slate-200 rounded-full h-2.5">
+                                <div class="progress-bar-fill h-2.5 rounded-full bg-indigo-500"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="skills-databases" class="skill-list hidden space-y-4">
+                        <h4 class="text-xl font-semibold text-indigo-700 mb-4">Databases</h4>
+                        <div data-proficiency="88" class="skill-bar-item">
+                            <span class="text-sm font-medium text-slate-700">PostgreSQL / MySQL (Relational)</span>
+                            <div class="w-full bg-slate-200 rounded-full h-2.5">
+                                <div class="progress-bar-fill h-2.5 rounded-full bg-indigo-500"></div>
+                            </div>
+                        </div>
+                        <div data-proficiency="70" class="skill-bar-item">
+                            <span class="text-sm font-medium text-slate-700">MongoDB / Firestore (NoSQL)</span>
+                            <div class="w-full bg-slate-200 rounded-full h-2.5">
+                                <div class="progress-bar-fill h-2.5 rounded-full bg-indigo-500"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="skills-tools" class="skill-list hidden space-y-4">
+                        <h4 class="text-xl font-semibold text-indigo-700 mb-4">Tools & Environment</h4>
+                        <div data-proficiency="75" class="skill-bar-item">
+                            <span class="text-sm font-medium text-slate-700">Docker (Containerization)</span>
+                            <div class="w-full bg-slate-200 rounded-full h-2.5">
+                                <div class="progress-bar-fill h-2.5 rounded-full bg-indigo-500"></div>
+                            </div>
+                        </div>
+                        <div data-proficiency="85" class="skill-bar-item">
+                            <span class="text-sm font-medium text-slate-700">Git (Version Control)</span>
+                            <div class="w-full bg-slate-200 rounded-full h-2.5">
+                                <div class="progress-bar-fill h-2.5 rounded-full bg-indigo-500"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Projects Deep-Dive Section -->
+        <section id="projects-section" class="page-section hidden">
+            <div class="bg-white p-8 rounded-xl shadow-md">
+                <h2 class="text-3xl font-bold text-indigo-700 mb-6">Projects Deep-Dive</h2>
+                <p class="text-lg text-slate-700 leading-relaxed mb-8">
+                    This section details the most significant technical projects Aman has undertaken. Use the tabs to switch between projects and explore the specific challenges, methodologies, and technologies applied in each initiative.
+                </p>
+
+                <!-- Project Tabs -->
+                <div class="border-b border-slate-200 mb-6">
+                    <nav class="flex -mb-px space-x-6">
+                        <button class="tab-btn active whitespace-nowrap py-3 px-1 border-b-2 font-medium text-lg text-slate-500" data-target="project-adas">
+                            ADAS for Indian Roads
+                        </button>
+                        <button class="tab-btn whitespace-nowrap py-3 px-1 border-b-2 border-transparent font-medium text-lg text-slate-500 hover:text-indigo-600 hover:border-indigo-300" data-target="project-guide">
+                            AI-Powered Guide
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- LLM Feature: Project Summarizer -->
+                <div class="bg-indigo-100 p-6 rounded-lg shadow-inner mb-6">
+                    <h4 class="text-xl font-semibold text-indigo-700 mb-3 flex items-center">
+                        <span class="mr-2 text-2xl">✨</span> AI Project Summarizer
+                    </h4>
+                    <p class="text-slate-700 mb-4">
+                        Need a quick overview or a different angle? Click below to generate a **3-sentence executive summary** of the current project, focusing on impact.
+                    </p>
+                    <button id="generateSummaryBtn" class="w-full bg-indigo-600 text-white font-bold py-2 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-indigo-400">
+                        Summarize **ADAS for Indian Roads**
+                    </button>
+                    <div id="aiSummaryOutput" class="mt-4 p-4 bg-white border border-indigo-300 rounded-lg hidden">
+                        <p class="font-semibold text-indigo-800">Executive Summary:</p>
+                        <p id="aiSummaryText" class="text-slate-800 mt-1 italic"></p>
+                    </div>
+                </div>
+                <!-- End LLM Feature -->
+
+
+                <!-- Project Content -->
+                <div id="project-adas" class="project-content">
+                    <div class="grid md:grid-cols-3 gap-6 mb-6">
+                        <!-- Metric Card 1 -->
+                        <div class="bg-indigo-50 p-4 rounded-lg shadow-sm">
+                            <p class="text-sm font-medium text-indigo-600">Autonomy Goal</p>
+                            <p class="text-2xl font-bold text-indigo-800">SAE Level 3</p>
+                        </div>
+                        <!-- Metric Card 2 -->
+                        <div class="bg-indigo-50 p-4 rounded-lg shadow-sm">
+                            <p class="text-sm font-medium text-indigo-600">Model Framework</p>
+                            <p class="text-2xl font-bold text-indigo-800">Hybrid DL/CV</p>
+                        </div>
+                        <!-- Metric Card 3 -->
+                        <div class="bg-indigo-50 p-4 rounded-lg shadow-sm">
+                            <p class="text-sm font-medium text-indigo-600">Model Accuracy (Target)</p>
+                            <p class="text-2xl font-bold text-indigo-800">92%+</p>
+                        </div>
+                    </div>
+                    
+                    <h3 class="text-2xl font-semibold text-slate-800 mb-1">Localized SAE Level 3 ADAS for Indian Roads (Research Project)</h3>
+                    <p class="text-md font-medium text-slate-500 mb-4">Pune, Maharashtra | July 2025 – Present</p>
+                    
+                    <h4 class="text-lg font-semibold text-indigo-600 mt-6 mb-2">Key Activities & Methodology</h4>
+                    <ul class="list-disc list-outside space-y-3 pl-5 text-slate-700 leading-relaxed">
+                        <li data-summary-text="Directed research and development activities focused on the formulation of a cost-effective, localized Advanced Driver-Assistance System (ADAS) solution, specifically engineered for the unpredictable and unstructured environments characteristic of Indian roadways.">**Directed** research and development activities focused on the formulation of a cost-effective, **localized Advanced Driver-Assistance System (ADAS)** solution, specifically engineered for the unpredictable and unstructured environments characteristic of Indian roadways.</li>
+                        <li data-summary-text="Architected the system design employing a hybrid approach, which integrates conventional OpenCV computer vision algorithms with state-of-the-art deep learning models, including YOLOv5 and Mask R-CNN.">**Architected** the system design employing a **hybrid approach**, which integrates conventional **OpenCV** computer vision algorithms with state-of-the-art deep learning models, including **YOLOv5** and **Mask R-CNN**.</li>
+                        <li data-summary-text="Trained individual models on modified datasets collected from Indian roads, with the intent of augmenting road safety and facilitating progression toward SAE Level 3 autonomy.">**Trained** individual models on modified datasets collected from Indian roads, with the intent of augmenting road safety and facilitating progression toward **SAE Level 3 autonomy**.</li>
+                    </ul>
+
+                    <h4 class="text-lg font-semibold text-indigo-600 mt-6 mb-3">Technology Stack</h4>
+                    <div class="flex flex-wrap gap-3">
+                        <span class="bg-slate-100 text-slate-700 px-4 py-1 rounded-full font-medium">Python</span>
+                        <span class="bg-slate-100 text-slate-700 px-4 py-1 rounded-full font-medium">OpenCV</span>
+                        <span class="bg-slate-100 text-slate-700 px-4 py-1 rounded-full font-medium">YOLOv5</span>
+                        <span class="bg-slate-100 text-slate-700 px-4 py-1 rounded-full font-medium">Mask R-CNN</span>
+                    </div>
+                </div>
+
+                <div id="project-guide" class="project-content hidden">
+                    <div class="grid md:grid-cols-3 gap-6 mb-6">
+                        <!-- Metric Card 1 -->
+                        <div class="bg-indigo-50 p-4 rounded-lg shadow-sm">
+                            <p class="text-sm font-medium text-indigo-600">Duration</p>
+                            <p class="text-2xl font-bold text-indigo-800">4 Months</p>
+                        </div>
+                        <!-- Metric Card 2 -->
+                        <div class="bg-indigo-50 p-4 rounded-lg shadow-sm">
+                            <p class="text-sm font-medium text-indigo-600">Core Technology</p>
+                            <p class="text-2xl font-bold text-indigo-800">CNNs</p>
+                        </div>
+                        <!-- Metric Card 3 -->
+                        <div class="bg-indigo-50 p-4 rounded-lg shadow-sm">
+                            <p class="text-sm font-medium text-indigo-600">Deployment Type</p>
+                            <p class="text-2xl font-bold text-indigo-800">Real-time</p>
+                        </div>
+                    </div>
+
+                    <h3 class="text-2xl font-semibold text-slate-800 mb-1">AI & ML- Powered Guide for Holy Places</h3>
+                    <p class="text-md font-medium text-slate-500 mb-4">Pune, Maharashtra | July 2024 – November 2024</p>
+                    
+                    <h4 class="text-lg font-semibold text-indigo-600 mt-6 mb-2">Key Activities & Methodology</h4>
+                    <ul class="list-disc list-outside space-y-3 pl-5 text-slate-700 leading-relaxed">
+                        <li data-summary-text="Engineered and successfully deployed a comprehensive, end-to-end object tracking system leveraging Convolutional Neural Networks (CNNs) integrated with the OpenCV library.">**Engineered** and successfully deployed a comprehensive, end-to-end object tracking system leveraging **Convolutional Neural Networks (CNNs)** integrated with the **OpenCV** library.</li>
+                        <li data-summary-text="Developed a real-time object tracking mechanism designed to furnish a guided and enhanced interactive experience for site visitors.">**Developed** a real-time object tracking mechanism designed to furnish a guided and enhanced interactive experience for site visitors.</li>
+                    </ul>
+
+                    <h4 class="text-lg font-semibold text-indigo-600 mt-6 mb-3">Technology Stack</h4>
+                    <div class="flex flex-wrap gap-3">
+                        <span class="bg-slate-100 text-slate-700 px-4 py-1 rounded-full font-medium">Python</span>
+                        <span class="bg-slate-100 text-slate-700 px-4 py-1 rounded-full font-medium">OpenCV</span>
+                        <span class="bg-slate-100 text-slate-700 px-4 py-1 rounded-full font-medium">CNNs</span>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Education & Certifications Section -->
+        <section id="education-section" class="page-section hidden">
+            <div class="bg-white p-8 rounded-xl shadow-md">
+                <h2 class="text-3xl font-bold text-indigo-700 mb-6">Education & Certifications Timeline</h2>
+                <p class="text-lg text-slate-700 leading-relaxed mb-10">
+                    This section outlines the academic progression (in **blue** for degrees) and specialized professional training (in **gray** for certifications and secondary education).
+                </p>
+
+                <div class="relative border-l-4 border-indigo-200 ml-4">
+                    <!-- Timeline Item 1 - Education -->
+                    <div class="mb-10 ml-8 relative">
+                        <div class="absolute -left-10 bg-indigo-600 rounded-full w-4 h-4 border-4 border-white"></div>
+                        <p class="text-sm font-medium text-indigo-600 mb-1">Expected Nov 2026</p>
+                        <h3 class="text-xl font-semibold text-slate-800">Bachelor of Technology in Data Science</h3>
+                        <p class="text-md text-slate-600">G.H. Raisoni College of Engineering & Management, Pune</p>
+                        <p class="text-sm text-slate-500 italic">Affiliated with Savitribai Phule Pune University</p>
+                    </div>
+                    <!-- Timeline Item 2 - Certification -->
+                    <div class="mb-10 ml-8 relative">
+                        <div class="absolute -left-10 bg-indigo-600 rounded-full w-4 h-4 border-4 border-white"></div>
+                        <p class="text-sm font-medium text-indigo-600 mb-1">June 2024</p>
+                        <h3 class="text-xl font-semibold text-slate-800">IBM Data Science Professional Certificate</h3>
+                        <p class="text-md text-slate-600">Successfully concluded a rigorous 10-course professional curriculum encompassing core data science competencies, including **Python**, **SQL**, data visualization techniques, and fundamental **machine learning** principles, culminating in a dedicated Capstone project.</p>
+                    </div>
+                    <!-- Timeline Item 3 - Education -->
+                    <div class="mb-10 ml-8 relative">
+                        <div class="absolute -left-10 bg-slate-400 rounded-full w-4 h-4 border-4 border-white"></div>
+                        <p class="text-sm font-medium text-slate-500 mb-1">2022</p>
+                        <h3 class="text-xl font-semibold text-slate-800">Higher Secondary School Certificate</h3>
+                        <p class="text-md text-slate-600">Nowrosjee Wadia College Arts, Science, Pune</p>
+                    </div>
+                    <!-- Timeline Item 4 - Education -->
+                    <div class="mb-10 ml-8 relative">
+                        <div class="absolute -left-10 bg-slate-400 rounded-full w-4 h-4 border-4 border-white"></div>
+                        <p class="text-sm font-medium text-slate-500 mb-1">2020</p>
+                        <h3 class="text-xl font-semibold text-slate-800">Secondary School Certificate</h3>
+                        <p class="text-md text-slate-600">Rosary High School, Pune</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Experience & Leadership Section -->
+        <section id="experience-section" class="page-section hidden">
+            <div class="bg-white p-8 rounded-xl shadow-md">
+                <h2 class="text-3xl font-bold text-indigo-700 mb-6">Leadership & Co-Curriculars</h2>
+                <p class="text-lg text-slate-700 leading-relaxed mb-8">
+                    This section highlights practical leadership and organizational experience gained outside of core academics. Click on each role to expand and see the specific responsibilities and achievements associated with it.
+                </p>
+
+                <div class="space-y-4">
+                    <!-- Accordion Item 1 -->
+                    <div class="accordion-item bg-slate-50 rounded-lg border border-slate-200 hover:shadow-lg transition-shadow">
+                        <button class="accordion-header w-full flex justify-between items-center p-5 text-left">
+                            <span class="text-lg font-semibold text-indigo-700">Volunteer, GDSC (Google Developer Student Club)</span>
+                            <span class="accordion-icon text-2xl font-light text-indigo-600 transition-transform transform">+</span>
+                        </button>
+                        <div class="accordion-content hidden p-5 pt-0">
+                            <p class="text-sm font-medium text-slate-500 mb-3">GHRCEM, Pune | September 2024 – July 2025</p>
+                            <ul class="list-disc list-outside space-y-3 pl-5 text-slate-700 leading-relaxed">
+                                <li>**Provided** crucial assistance in the coordination of the Google Study Jam event, which entailed effective management of logistics and the provision of technical support to all participants.</li>
+                                <li>**Ensured** the cultivation of a streamlined and highly engaging experience for all attendees, thereby significantly enhancing the club's educational outreach and community engagement profile.</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <!-- Accordion Item 2 -->
+                    <div class="accordion-item bg-slate-50 rounded-lg border border-slate-200 hover:shadow-lg transition-shadow">
+                        <button class="accordion-header w-full flex justify-between items-center p-5 text-left">
+                            <span class="text-lg font-semibold text-indigo-700">Sports Event Organizer</span>
+                            <span class="accordion-icon text-2xl font-light text-indigo-600 transition-transform transform">+</span>
+                        </button>
+                        <div class="accordion-content hidden p-5 pt-0">
+                            <p class="text-sm font-medium text-slate-500 mb-3">Nowrosjee Wadia College, Pune | July 2022</p>
+                            <ul class="list-disc list-outside space-y-3 pl-5 text-slate-700 leading-relaxed">
+                                <li>**Successfully managed** and implemented the organization of a college-level basketball tournament, overseeing all phases of the event.</li>
+                                <li>**Supervised** comprehensive event logistics, which included the meticulous management of team registrations, match scheduling, and venue coordination, thus demonstrating high-level organizational and leadership acumen.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Simple Toast Notification for Copy -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-green-500 text-white px-4 py-3 rounded-lg shadow-xl opacity-0 transition-opacity duration-300 pointer-events-none">
+        Copied to clipboard!
+    </div>
+
+    <script>
+        let skillsChartInstance = null;
+        let currentSkillCategoryName = "Data Science & ML"; // Tracks the currently active category name
+
+        function animateProgressBars(containerId) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            
+            // Reset bars before animation, in case the user navigates away and back quickly
+            container.querySelectorAll('.progress-bar-fill').forEach(bar => {
+                bar.style.width = '0%';
+            });
+
+            // Delay necessary to ensure the reset takes effect before applying the transition
+            setTimeout(() => {
+                container.querySelectorAll('.skill-bar-item').forEach(item => {
+                    const proficiency = item.getAttribute('data-proficiency');
+                    const fillBar = item.querySelector('.progress-bar-fill');
+                    if (fillBar) {
+                        // Apply the actual width, which triggers the CSS transition (animation)
+                        fillBar.style.width = `${proficiency}%`; 
+                    }
+                });
+            }, 100); 
+        }
+
+        function createSkillsChart() {
+            const skillData = {
+                labels: ['Data Science & ML', 'Programming', 'Databases', 'Tools & Environment'],
+                datasets: [{
+                    label: 'Skill Count Distribution',
+                    data: [12, 3, 4, 2],
+                    backgroundColor: 'rgba(79, 70, 229, 0.2)',
+                    borderColor: 'rgba(79, 70, 229, 1)',
+                    pointBackgroundColor: 'rgba(79, 70, 229, 1)',
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: 'rgba(79, 70, 229, 1)'
+                }]
+            };
+
+            const radarCtx = document.getElementById('skillsRadarChart')?.getContext('2d');
+            if (radarCtx) {
+                skillsChartInstance = new Chart(radarCtx, {
+                    type: 'radar',
+                    data: skillData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return `${context.dataset.label}: ${context.raw}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            r: {
+                                angleLines: {
+                                    color: 'rgba(0, 0, 0, 0.1)'
+                                },
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.1)'
+                                },
+                                pointLabels: {
+                                    font: {
+                                        size: 14,
+                                        weight: '500'
+                                    },
+                                    color: '#1e293b'
+                                },
+                                ticks: {
+                                    backdropColor: 'transparent',
+                                    stepSize: 4,
+                                    font: {
+                                        size: 12
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.remove('opacity-0', 'bg-green-500');
+            toast.classList.add('opacity-100', 'bg-indigo-600');
+            
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'bg-indigo-600');
+                toast.classList.add('opacity-0', 'bg-green-500');
+            }, 2000);
+        }
+
+        function copyContact(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                document.execCommand('copy');
+                showToast('Copied ' + text.substring(0, 15) + '...!');
+            } catch (err) {
+                console.error('Could not copy text: ', err);
+            }
+            document.body.removeChild(textarea);
+        }
+        window.copyContact = copyContact;
+
+        // --- GEMINI API FUNCTION: GENERATE INTERVIEW QUESTION ---
+        async function generateInterviewQuestion() {
+            const btn = document.getElementById('generateQuestionBtn');
+            const outputDiv = document.getElementById('aiQuestionOutput');
+            const outputText = document.getElementById('aiQuestionText');
+            const skillListName = currentSkillCategoryName;
+            
+            btn.disabled = true;
+            btn.textContent = 'Generating Question...';
+            outputDiv.classList.add('hidden');
+            outputText.textContent = '';
+
+            const skillsListElement = document.getElementById(`skills-${skillListName.toLowerCase().replace(/ & /g, '').replace(/\s/g, '')}`);
+            const skills = Array.from(skillsListElement.querySelectorAll('.skill-bar-item span'))
+                               .map(span => span.textContent.trim())
+                               .join(', ');
+
+            const userPrompt = `Generate one challenging, technical interview question specifically for a Data Science Fresher based on the following skill category: ${skillListName}. The question must directly reference at least one of these skills: ${skills}. Do not provide the answer.`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userPrompt }] }],
+                systemInstruction: {
+                    parts: [{ text: "You are an expert technical interviewer specializing in Data Science. Provide a single, well-phrased interview question in a neutral, professional tone." }]
+                },
+            };
+
+            try {
+                const response = await fetchWithRetry(`${API_URL}?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const generatedText = response.candidates?.[0]?.content?.parts?.[0]?.text || "Could not generate question. Please try again.";
+                
+                outputText.textContent = generatedText;
+                outputDiv.classList.remove('hidden');
+
+            } catch (error) {
+                outputText.textContent = `Error: Failed to fetch API response. (${error.message})`;
+                outputDiv.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = `Generate Question for ${skillListName}`;
+            }
+        }
+
+        // --- GEMINI API FUNCTION: GENERATE PROJECT SUMMARY ---
+        async function generateProjectSummary(projectTitle, projectDetails) {
+            const btn = document.getElementById('generateSummaryBtn');
+            const outputDiv = document.getElementById('aiSummaryOutput');
+            const outputText = document.getElementById('aiSummaryText');
+            
+            btn.disabled = true;
+            btn.textContent = 'Generating Summary...';
+            outputDiv.classList.add('hidden');
+            outputText.textContent = '';
+
+            const userPrompt = `Generate a concise, high-impact, 3-sentence executive summary of the following project details. Focus on the objective, core technology, and the resulting achievement/impact. Project Title: ${projectTitle}. Details: ${projectDetails}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userPrompt }] }],
+                systemInstruction: {
+                    parts: [{ text: "You are a professional technical writer for a Data Science consulting firm. Provide a brief executive summary (max 3 sentences) in a formal, objective tone." }]
+                },
+            };
+
+            try {
+                const response = await fetchWithRetry(`${API_URL}?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const generatedText = response.candidates?.[0]?.content?.parts?.[0]?.text || "Could not generate summary. Please try again.";
+                
+                outputText.textContent = generatedText;
+                outputDiv.classList.remove('hidden');
+
+            } catch (error) {
+                outputText.textContent = `Error: Failed to fetch API response. (${error.message})`;
+                outputDiv.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                // Update button text to current project
+                const currentProjectBtn = document.querySelector('.project-content:not(.hidden)');
+                const currentProjectTitle = currentProjectBtn.querySelector('h3').textContent;
+                btn.textContent = `Summarize **${currentProjectTitle}**`;
+            }
+        }
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            createSkillsChart();
+            
+            const navLinks = document.querySelectorAll('.nav-link');
+            const sections = document.querySelectorAll('.page-section');
+            const skillLists = document.querySelectorAll('.skill-list');
+            const generateQuestionBtn = document.getElementById('generateQuestionBtn');
+            const currentSkillCategorySpan = document.getElementById('currentSkillCategory');
+            
+            // Initial button setup
+            generateQuestionBtn.onclick = generateInterviewQuestion;
+
+            navLinks.forEach(link => {
+                link.addEventListener('click', () => {
+                    const targetId = link.getAttribute('data-target');
+                    
+                    sections.forEach(section => {
+                        const isTarget = section.id === targetId;
+                        if (isTarget) {
+                            section.classList.remove('hidden');
+                            if (targetId === 'skills-section') {
+                                // Animate the skill bars when the section is shown
+                                const currentActiveSkillList = document.querySelector('.skill-list:not(.hidden)');
+                                if (currentActiveSkillList) {
+                                    animateProgressBars(currentActiveSkillList.id);
+                                } else {
+                                    // Default to DS/ML if none active
+                                    animateProgressBars('skills-dsml');
+                                }
+                                if (skillsChartInstance) {
+                                    skillsChartInstance.resize();
+                                }
+                            }
+                        } else {
+                            section.classList.add('hidden');
+                        }
+                    });
+
+                    navLinks.forEach(l => l.classList.remove('active'));
+                    link.classList.add('active');
+                });
+            });
+
+            const tabBtns = document.querySelectorAll('.tab-btn');
+            const projectContents = document.querySelectorAll('.project-content');
+            const generateSummaryBtn = document.getElementById('generateSummaryBtn');
+            const aiSummaryOutput = document.getElementById('aiSummaryOutput');
+
+            // --- Project Summarizer Logic ---
+            const updateProjectSummaryFeature = () => {
+                const currentProjectContent = document.querySelector('.project-content:not(.hidden)');
+                const projectTitle = currentProjectContent.querySelector('h3').textContent;
+                const projectDetailsElements = currentProjectContent.querySelectorAll('li[data-summary-text]');
+                
+                // Concatenate the data-summary-text from all list items
+                const projectDetails = Array.from(projectDetailsElements)
+                    .map(li => li.getAttribute('data-summary-text'))
+                    .join('; ');
+
+                generateSummaryBtn.textContent = `Summarize **${projectTitle}**`;
+                generateSummaryBtn.disabled = false;
+                generateSummaryBtn.onclick = () => generateProjectSummary(projectTitle, projectDetails);
+                
+                // Clear and hide previous summary when tab changes
+                document.getElementById('aiSummaryText').textContent = '';
+                aiSummaryOutput.classList.add('hidden');
+            };
+
+            tabBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const targetId = btn.getAttribute('data-target');
+                    
+                    projectContents.forEach(content => {
+                        if (content.id === targetId) {
+                            content.classList.remove('hidden');
+                        } else {
+                            content.classList.add('hidden');
+                        }
+                    });
+
+                    tabBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    updateProjectSummaryFeature();
+                });
+            });
+
+            // Initial setup for the Project Summarizer
+            updateProjectSummaryFeature();
+
+            const skillBtns = document.querySelectorAll('.skill-btn');
+
+            skillBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const targetId = btn.getAttribute('data-target');
+                    const categoryName = btn.textContent.trim();
+                    currentSkillCategoryName = categoryName;
+
+                    skillLists.forEach(list => {
+                        const isTarget = list.id === targetId;
+                        if (isTarget) {
+                            list.classList.remove('hidden');
+                            // Animate bars for the newly selected category
+                            animateProgressBars(targetId);
+                        } else {
+                            list.classList.add('hidden');
+                        }
+                    });
+                    
+                    skillBtns.forEach(b => b.classList.remove('active', 'bg-white', 'hover:bg-indigo-50', 'text-indigo-600', 'border', 'border-indigo-200'));
+                    skillBtns.forEach(b => {
+                        if(b.getAttribute('data-target') !== targetId) {
+                            b.classList.add('bg-white', 'hover:bg-indigo-50', 'text-indigo-600', 'border', 'border-indigo-200');
+                        }
+                    });
+                    btn.classList.add('active');
+
+                    // Update interview generator text
+                    currentSkillCategorySpan.textContent = categoryName;
+                    generateQuestionBtn.textContent = `Generate Question for ${categoryName}`;
+                    document.getElementById('aiQuestionText').textContent = '';
+                    document.getElementById('aiQuestionOutput').classList.add('hidden');
+                    generateQuestionBtn.disabled = false;
+                });
+            });
+
+            const accordionHeaders = document.querySelectorAll('.accordion-header');
+            accordionHeaders.forEach(header => {
+                header.addEventListener('click', () => {
+                    const content = header.nextElementSibling;
+                    const icon = header.querySelector('.accordion-icon');
+                    const isOpen = !content.classList.contains('hidden');
+
+                    if (isOpen) {
+                        content.classList.add('hidden');
+                        icon.textContent = '+';
+                        header.parentElement.classList.remove('shadow-lg');
+                    } else {
+                        content.classList.remove('hidden');
+                        icon.textContent = '−';
+                        header.parentElement.classList.add('shadow-lg');
+                    }
+                });
+            });
+
+            // Initial skill bar animation for the default section
+            animateProgressBars('skills-dsml');
+        });
+    </script>
+</body>
+</html> 
