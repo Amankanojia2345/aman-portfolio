@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aman Portfolio | Data Scientist</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;600;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117; /* Dark background for data theme */
+            overflow: hidden; /* Prevent scrollbar from animation */
+        }
+        .data-flow-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 0;
+        }
+        .data-dot {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background-color: #4f46e5;
+            opacity: 0.5;
+            animation: flow 10s linear infinite;
+        }
+        @keyframes flow {
+            0% { transform: translate(var(--start-x), var(--start-y)) scale(1); opacity: 0.5; }
+            50% { opacity: 0.8; }
+            100% { transform: translate(var(--end-x), var(--end-y)) scale(0.5); opacity: 0; }
+        }
+        .content-card {
+            z-index: 10;
+            position: relative;
+            background-color: rgba(255, 255, 255, 0.95); /* Slightly transparent white card */
+            backdrop-filter: blur(5px);
+        }
+        .ai-output-container {
+            min-height: 50px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <!-- Background Animation Layer -->
+    <div id="data-flow-bg" class="data-flow-bg"></div>
+
+    <!-- Gemini API Setup -->
+    <script>
+        const apiKey = ""; 
+        const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
+
+        async function fetchWithRetry(url, options, maxRetries = 3) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        if (response.status === 429 && i < maxRetries - 1) {
+                            const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue;
+                        }
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return await response.json();
+                } catch (error) {
+                    if (i === maxRetries - 1) {
+                        console.error("API call failed after max retries:", error);
+                        throw error;
+                    }
+                }
+            }
+        }
+
+        function toggleLoading(btnId, loadingText, isLoading) {
+            const btn = document.getElementById(btnId);
+            const originalText = btn.getAttribute('data-original-text');
+            
+            if (isLoading) {
+                btn.setAttribute('data-original-text', btn.innerHTML);
+                btn.disabled = true;
+                btn.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> ${loadingText}...`;
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        async function generateInsight() {
+            const btnId = 'generate-insight-btn';
+            const outputDiv = document.getElementById('ai-output-section');
+            const summaryText = document.querySelector('.summary-text').textContent;
+            
+            toggleLoading(btnId, 'Generating Insight', true);
+            outputDiv.innerHTML = `<p class="text-sm text-center text-indigo-500 italic">Thinking...</p>`;
+
+            const systemPrompt = "You are a professional technical insight generator. Analyze the following profile summary (Python, ML, SQL, AI/ML solutions) and generate a single, compelling sentence that highlights a key, high-level principle, challenge, or finding related to applying these skills in modern systems, suitable for a technical recruiter. Do not mention the name Aman Kanojia. Do not use quotes or list formatting.";
+            
+            const payload = {
+                contents: [{ parts: [{ text: summaryText }] }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+            };
+
+            try {
+                const response = await fetchWithRetry(`${API_URL}?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const generatedText = response.candidates?.[0]?.content?.parts?.[0]?.text || 
+                                     "Successful ML solution deployment hinges on robust data pipeline design and continuous model monitoring.";
+                
+                outputDiv.innerHTML = `<p class="text-sm text-center text-slate-800 p-2 bg-indigo-50 rounded-lg border border-indigo-200">
+                                            <span class="font-semibold text-indigo-700 mr-2">✨ Insight:</span>${generatedText.trim()}
+                                        </p>`;
+
+            } catch (error) {
+                outputDiv.innerHTML = `<p class="text-sm text-center text-red-500">Error generating insight. Try again later.</p>`;
+            } finally {
+                toggleLoading(btnId, '', false);
+            }
+        }
+
+        async function generateLinkedInDraft() {
+            const btnId = 'generate-linkedin-btn';
+            const outputDiv = document.getElementById('ai-output-section');
+            const summaryText = document.querySelector('.summary-text').textContent;
+            
+            toggleLoading(btnId, 'Drafting Summary', true);
+            outputDiv.innerHTML = `<p class="text-sm text-center text-indigo-500 italic">Drafting...</p>`;
+
+            const systemPrompt = "You are a professional LinkedIn summary writer. Take the following third-person professional summary and rewrite it into a conversational, high-impact, first-person narrative (using 'I' or 'my'). The draft must be exactly 2 sentences long, highlighting core skills (Python, ML, SQL) and the career goal. Do not use quotes.";
+            
+            const payload = {
+                contents: [{ parts: [{ text: summaryText }] }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+            };
+
+            try {
+                const response = await fetchWithRetry(`${API_URL}?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const generatedText = response.candidates?.[0]?.content?.parts?.[0]?.text || 
+                                     "I am a meticulous Data Science student with a strong foundation in Python, Machine Learning, and SQL, specializing in end-to-end AI/ML solution implementation. I am eager to apply my proficiency in strategic problem-solving and data analysis to drive innovation within a forward-thinking organization.";
+                
+                outputDiv.innerHTML = `<div class="p-3 bg-indigo-100 rounded-lg border border-indigo-300 text-left w-full max-w-xl mx-auto">
+                                            <span class="font-semibold text-indigo-800 mr-2 block mb-1">✨ LinkedIn Draft (First-Person):</span>
+                                            <p class="text-sm text-slate-800">${generatedText.trim()}</p>
+                                        </div>`;
+
+            } catch (error) {
+                outputDiv.innerHTML = `<p class="text-sm text-center text-red-500">Error drafting summary. Try again later.</p>`;
+            } finally {
+                toggleLoading(btnId, '', false);
+            }
+        }
+        
+        // --- ANIMATION JAVASCRIPT ---
+        function createDataDots(count) {
+            const container = document.getElementById('data-flow-bg');
+            if (!container) return;
+            for (let i = 0; i < count; i++) {
+                const dot = document.createElement('div');
+                dot.classList.add('data-dot');
+                
+                const startX = Math.random() * window.innerWidth;
+                const startY = Math.random() * window.innerHeight;
+                const endX = Math.random() * window.innerWidth;
+                const endY = Math.random() * window.innerHeight;
+
+                const duration = 8 + Math.random() * 5; // 8 to 13 seconds
+                const delay = Math.random() * 10; // Staggered start
+
+                dot.style.setProperty('--start-x', `${startX}px`);
+                dot.style.setProperty('--start-y', `${startY}px`);
+                dot.style.setProperty('--end-x', `${endX}px`);
+                dot.style.setProperty('--end-y', `${endY}px`);
+                dot.style.animationDuration = `${duration}s`;
+                dot.style.animationDelay = `-${delay}s`; // Use negative delay for immediate start
+
+                container.appendChild(dot);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            createDataDots(80); // Create 80 dots for the animation
+        });
+
+    </script>
+
+    <!-- Landing Page Content Card -->
+    <div class="content-card max-w-3xl w-full text-slate-900 rounded-2xl shadow-2xl p-8 md:p-12 text-center border-t-4 border-indigo-600">
+        
+        <h1 class="4xl md:text-5xl font-extrabold mb-1 text-slate-900">
+            AMAN KANOJIA
+        </h1>
+        <p class="text-xl md:text-2xl font-light text-indigo-600 mb-8">
+            Data Science Student
+        </p>
+
+        <!-- Professional Summary (Asterisks Removed) -->
+        <p class="summary-text text-base text-slate-700 max-w-2xl mx-auto mb-6 leading-relaxed">
+            Possessing a meticulous Data Science approach, the candidate's expertise is grounded in expert proficiency with Python, Machine Learning (ML), and SQL. This foundation has been honed through implementing end-to-end AI solutions and managing complex research initiatives. The career ambition is to leverage this technical proficiency in data analysis and strategic problem-solving to drive innovation within a progressive organizational structure.
+        </p>
+
+        <!-- AI Insight Feature Buttons -->
+        <div class="mb-8">
+            <div class="flex flex-col sm:flex-row justify-center gap-3 mb-4">
+                <button id="generate-insight-btn" onclick="generateInsight()" 
+                        class="inline-flex items-center px-4 py-2 font-semibold text-sm rounded-full bg-slate-800 text-white transition duration-300 hover:bg-slate-700 shadow-md">
+                    ✨ Generate Technical Insight
+                </button>
+                <button id="generate-linkedin-btn" onclick="generateLinkedInDraft()" 
+                        class="inline-flex items-center px-4 py-2 font-semibold text-sm rounded-full bg-indigo-600 text-white transition duration-300 hover:bg-indigo-700 shadow-md">
+                    ✨ Draft LinkedIn Summary
+                </button>
+            </div>
+            <div id="ai-output-section" class="ai-output-container w-full max-w-lg mx-auto">
+                <!-- Output will appear here -->
+            </div>
+        </div>
+
+        <!-- Link Buttons -->
+        <div class="flex flex-col md:flex-row justify-center gap-4">
+
+            <!-- Interactive Portfolio Link -->
+            <a href="aman.html" class="inline-flex items-center justify-center px-6 py-3 font-semibold rounded-lg shadow-md bg-indigo-600 text-white transition duration-300 hover:bg-indigo-700">
+                <span class="mr-2">🚀</span> Interactive Portfolio
+            </a>
+
+            <!-- ATS Resume Link -->
+            <a href="aman_kanojia_resume.md" target="_blank" class="inline-flex items-center justify-center px-6 py-3 font-semibold rounded-lg shadow-md bg-slate-100 text-indigo-600 border border-indigo-200 transition duration-300 hover:bg-slate-200">
+                <span class="mr-2">📄</span> Download ATS Resume
+            </a>
+        </div>
+    </div>
+
+</body>
+</html>
